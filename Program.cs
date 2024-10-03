@@ -1,229 +1,117 @@
-﻿using DotNetty.Common.Utilities;
-using System.Collections.Generic;
-using System.Drawing.Printing;
-using Newtonsoft.Json;
-using System.ComponentModel;
+﻿using Newtonsoft.Json;
 using ModbusDecoderTemp;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-using System.Diagnostics.Metrics;
-using System.Drawing;
-using System.Net;
-using System.Numerics;
-using System.Security.Cryptography;
-using System.Text;
-using System.Xml.Linq;
-using System;
-using Quartz;
+using Codec8;
 
 
+string input = "00000000000003918E07000001925006B1DD0100000000000000000000000000000000430019000E00010000020000030000040000B30000B40000320000330000160400470200F00000150500C80000EF00000A0009000A000A0002000B000C00F5000200431D7E0044000000B5000000B6000000420000001800000000000100DA000333B7AA5890DD0000000001925006A9C10100000000000000000000000000000000430019000E00010000020000030000040000B30000B40000320000330000160400470200F00000150500C80000EF00000A00090001000A0003000B000D00F5000200431D800044000000B5000000B6000000420000001800000000000100DA000333B7AA5890DD0000000001925006A5B30100000000000000000000000000000000430019000E00010000020000030000040000B30000B40000320000330000160400470200F00000150500C80000EF00000A00090002000A0004000B001400F5000300431D7F0044000000B5000000B6000000420000001800000000000100DA000333B7AA5890DD0000000001925006A19C0100000000000000000000000000000000430019000E00010000020000030000040000B30000B40000320000330000160400470200F00000150500C80000EF00000A00090002000A0005000B001600F5000400431D840044000000B5000000B6000000420000001800000000000100DA000333B7AA5890DD00000000019250069D970100000000000000000000000000000000430019000E00010000020000030000040000B30000B40000320000330000160400470200F00000150500C80000EF00000A00090003000A0002000B000E00F5000500431D860044000000B5000000B6000000420000001800000000000100DA000333B7AA5890DD000000000192500699910100000000000000000000000000000000430019000E00010000020000030000040000B30000B40000320000330000160400470200F00000150500C80000EF00000A00090001000A0002000B001100F5000100431D880044000000B5000000B6000000420000001800000000000100DA000333B7AA5890DD000000000192500691680100000000000000000000000000000000430019000E00010000020000030000040000B30000B40000320000330000160400470200F00000150500C80000EF00000A00090001000A0003000B001500F5000200431D8B0044000000B5000000B6000000420000001800000000000100DA000333B7AA5890DD0000070000819E";
 
-static byte[] HexStringToByteArray(string hexInput)
-{
-    int numberOfBytes = hexInput.Length / 2;  // Floor Div
-    byte[] byteArray = new byte[numberOfBytes];
-
-    for (int i = 0; i < numberOfBytes; i++)
-    {
-        string hexByte = hexInput.Substring(i * 2, 2);
-        byteArray[i] = Convert.ToByte(hexByte, 16);
-    }
-
-    return byteArray;
-}
-
-
-static Dictionary<string, dynamic> ParseBasicPDUResponseHexString(string pduHexString, string modbusType)
-{
-    Dictionary<string, dynamic> pdu = new Dictionary<string, dynamic>();
-
-    if (Enum.IsDefined(typeof(ModbusType), modbusType))
-    {
-        byte[] byteArray = HexStringToByteArray(pduHexString);
-        int functionCode = byteArray[0];
-        pdu["functionCode"] = functionCode;
-        int currentIndex = 1;
-
-        if ((new int[] { 5, 6, 15, 16 }).Contains(functionCode))
-        {
-            //pdu.Add("startAddress", (byteArray[currentIndex] * 256) + byteArray[currentIndex + 1]);
-            pdu["startAddress"] = (byteArray[currentIndex] * 256) + byteArray[currentIndex + 1];
-            currentIndex += 2;
-        }
-        if ((new int[] { 15, 16 }).Contains(functionCode))
-        {
-            pdu["quantity"] = (byteArray[currentIndex] * 256) + byteArray[currentIndex + 1];
-            currentIndex += 2;
-        }
-        if ((new int[] { 1, 2, 3, 4, 15, 16 }).Contains(functionCode))
-        {
-            pdu["dataByteCount"] = byteArray[currentIndex];
-            currentIndex += 1;
-        }
-        if ((new int[] { 1, 2, 3, 4, 5, 6 }).Contains(functionCode))
-        {
-            pdu["data"] = pduHexString.Substring(currentIndex * 2);
-            //Console.WriteLine(pdu["data"]);
-        }
-    }
-
-    return pdu;
-}
-
-static Dictionary<string, dynamic> ParseBasicPDURequestHexString(string pduHexString, string modbusType)
-{
-    Dictionary<string, dynamic> pdu = new Dictionary<string, dynamic>();
-
-    if (Enum.IsDefined(typeof(ModbusType), modbusType))
-    {
-        byte[] byteArray = HexStringToByteArray(pduHexString);
-        int functionCode = byteArray[0];
-        pdu["functionCode"] = functionCode;
-        pdu["startAddress"] = (byteArray[1] * 256) + byteArray[2];
-        int currentIndex = 3;
-
-        if ((new int[] { 1, 2, 3, 4, 15, 16 }).Contains(functionCode))
-        {
-            pdu["quantity"] = (byteArray[currentIndex] * 256) + byteArray[currentIndex + 1];
-            currentIndex += 2;
-        }
-        if ((new int[] { 15, 16 }).Contains(functionCode))
-        {
-            pdu["dataByteCount"] = byteArray[currentIndex];
-            currentIndex += 1;
-        }
-        if ((new int[] { 5, 6, 15, 16 }).Contains(functionCode))
-        {
-            pdu["data"] = pduHexString.Substring(currentIndex * 2);
-        }
-    }
-
-    return pdu;
-}
-
-static int DecodeUInt_AB(int offset, byte[] byteArray)
-{
-    int byteIndex = offset / 8;
-    return (byteArray[byteIndex] * 256) + byteArray[byteIndex + 1];
-}
-
-
-static Dictionary<string, dynamic> ParseBasicADUResponseHexString(string aduHexString,  string modbusType)
-{
-    Dictionary<string, dynamic> modbusResponse = new Dictionary<string, dynamic>();
-    byte[] byteArray = HexStringToByteArray(aduHexString);
-
-    if (modbusType == "RTU")
-    {
-        modbusResponse["slaveAddress"] = byteArray[0];
-        string pduHexString = aduHexString.Substring(2, aduHexString.Length - 6);
-        modbusResponse["pduComponents"] = ParseBasicPDUResponseHexString(pduHexString, modbusType);
-        modbusResponse["crc"] = (byteArray.Last() * 256) + byteArray[byteArray.Length - 2];
-    }
-    else if (modbusType == "TCP")
-    {
-        modbusResponse["TransactionId"] = DecodeUInt_AB(0, byteArray);
-        modbusResponse["ProtocolId"] = DecodeUInt_AB(16, byteArray);
-        modbusResponse["Length"] = DecodeUInt_AB(32, byteArray);
-        modbusResponse["slaveAddress"] = byteArray[6];
-        //string pduHexString = aduHexString.Substring(14);
-        string pduHexString = aduHexString[14..];
-        modbusResponse["pduComponents"] = ParseBasicPDUResponseHexString(pduHexString, modbusType);
-    }
-    else if (modbusType == "ASCII")
-    {
-        if (byteArray[0] == 0x3A && 
-            byteArray[byteArray.Length - 2] == 0x0D && 
-            byteArray[byteArray.Length - 1] == 0x0A)
-        {
-            // implement logic
-        }
-    }
-
-    return modbusResponse;
-}
-
-static Dictionary<string, dynamic> ParseBasicADURequestHexString(string aduHexString, string modbusType)
-{
-    Dictionary<string, dynamic> modbusRequest = new Dictionary<string, dynamic>();
-    byte[] byteArray = HexStringToByteArray(aduHexString);
-    if (modbusType == "RTU")
-    {
-        modbusRequest["slaveAddress"] = byteArray[0];
-        string pduHexString = aduHexString.Substring(2, aduHexString.Length - 6);
-        modbusRequest["pduComponents"] = ParseBasicPDURequestHexString(pduHexString, modbusType);
-        modbusRequest["crc"] = (byteArray.Last() * 256) + byteArray[byteArray.Length - 2];
-    }
-    else if (modbusType == "TCP")
-    {
-        modbusRequest["TransactionId"] = DecodeUInt_AB(0, byteArray);
-        modbusRequest["ProtocolId"] = DecodeUInt_AB(16, byteArray);
-        modbusRequest["Length"] = DecodeUInt_AB(32, byteArray);
-        modbusRequest["slaveAddress"] = byteArray[6];
-        string pduHexString = aduHexString[14..];
-        modbusRequest["pduComponents"] = ParseBasicPDURequestHexString(pduHexString, modbusType);
-    }
-    else if (modbusType == "ASCII")
-    {
-        if (byteArray[0] == 0x3A &&
-            byteArray[byteArray.Length - 2] == 0x0D &&
-            byteArray[byteArray.Length - 1] == 0x0A)
-        {
-            // implement logic
-        }
-    }
-
-    return modbusRequest;
-}
-
-static Dictionary<dynamic, dynamic> AddSlaveToNetwork(Dictionary<dynamic, dynamic> networkMap, string bus, string address, string name, string description, dynamic registerMap, dynamic? parseMap=null)
-{
-    Dictionary<dynamic, dynamic> slave = new Dictionary<dynamic, dynamic>();
-    Dictionary<dynamic, dynamic> networkMapTable = networkMap;
-    slave["Address"] = address;
-    slave["Name"] = name;
-    slave["Description"] = description;
-    slave["RegisterMap"] = registerMap;
-    if (!networkMapTable.ContainsKey(bus))
-    {
-        networkMapTable[bus] = new Dictionary<dynamic, dynamic>();
-    }
-
-    if (parseMap != null)
-    {
-        slave["ParseMap"] = parseMap;
-        networkMapTable[bus][address] = slave;
-    }
-    else
-    {
-        networkMapTable[bus] = new List<Dictionary<dynamic, dynamic>>{ slave } ;
-    }
-
-    return networkMapTable;
-}
-
-//static Dictionary<>
-
-
-// Testing
-
-//byte[] byteArray = HexStringToByteArray("02030000001185F5");
-//foreach (byte b in byteArray)
+(GenericDecodeResult result, object valueOrError) = Codec8ExtendedDecoder.ParseHexadecimalString(input);
+Codec8ExtendedFrame frame = (Codec8ExtendedFrame)valueOrError;
+//if (result == GenericDecodeResult.SuccessCodec8Extended)
 //{
-//    Console.WriteLine(b.ToString());
+//    frame = (Codec8ExtendedFrame)valueOrError;
 //}
 
-//var parsedRTUResponse = ParseBasicADUResponseHexString("01030A2FF80000006A48B800013864", "RTU");
-var parsedRTUResponse = ParseBasicADURequestHexString("004000000006010300000023", "TCP");
-//Console.WriteLine(JsonConvert.SerializeObject(parsedRTUResponse, Formatting.Indented));
 
-Dictionary<string, dynamic> ModbusMap = new Dictionary<string, dynamic> {
-    //{ "MOD_MAP_CONXIONS_WATER_METER_V1", "{\"MODBUS_MAP\":{\"2\":{\"HOLDING_REG\":{\"Units\":\"M3/H\", \"Writeable\":false, \"Description\":\"Instantaneous Flow rate\", \"Name\":\"Flow Rate\", \"Size\":32, \"Readable\":true, \"Encoding\":\"UINT32\",\"_Current\":true,\"_StartTime\":1593732266,\"_EndTime\":0,\"_Id\":1593732266}}, \"4\":{\"HOLDING_REG\":{\"Units\":\"C\", \"Writeable\":false, \"Description\":\"Instantaneous Water Temperature\", \"Name\":\"Water Temperature\", \"Size\":16, \"Readable\":true, \"Encoding\":\"UINT16\",\"_Current\":true,\"_StartTime\":1593732267,\"_EndTime\":0,\"_Id\":1593732267}}, \"5\":{\"HOLDING_REG\":{\"Units\":\"ss\", \"Writeable\":false, \"Description\":\"Time Second\", \"Name\":\"Second\", \"Size\":16, \"Readable\":true, \"Encoding\":\"UINT16\",\"_Current\":true,\"_StartTime\":1593732268,\"_EndTime\":0,\"_Id\":1593732268}}, \"6\":{\"HOLDING_REG\":{\"Units\":\"mm\", \"Writeable\":false, \"Description\":\"Time Minute\", \"Name\":\"Minute\", \"Size\":16, \"Readable\":true, \"Encoding\":\"UINT16\",\"_Current\":true,\"_StartTime\":1593732269,\"_EndTime\":0,\"_Id\":1593732269}}, \"7\":{\"HOLDING_REG\":{\"Units\":\"hh\", \"Writeable\":false, \"Description\":\"Time Hour\", \"Name\":\"Hour\", \"Size\":16, \"Readable\":true, \"Encoding\":\"UINT16\",\"_Current\":true,\"_StartTime\":1593732270,\"_EndTime\":0,\"_Id\":1593732270}}, \"8\":{\"HOLDING_REG\":{\"Units\":\"DD\", \"Writeable\":false, \"Description\":\"Time Day\", \"Name\":\"Day\", \"Size\":16, \"Readable\":true, \"Encoding\":\"UINT16\",\"_Current\":true,\"_StartTime\":1593732271,\"_EndTime\":0,\"_Id\":1593732271}}, \"9\":{\"HOLDING_REG\":{\"Units\":\"MM\", \"Writeable\":false, \"Description\":\"Time Month\", \"Name\":\"Month\", \"Size\":16, \"Readable\":true, \"Encoding\":\"UINT16\",\"_Current\":true,\"_StartTime\":1593732272,\"_EndTime\":0,\"_Id\":1593732272}}, \"10\":{\"HOLDING_REG\":{\"Units\":\"YYYY\", \"Writeable\":false, \"Description\":\"Time Year\", \"Name\":\"Year\", \"Size\":16, \"Readable\":true, \"Encoding\":\"UINT16\",\"_Current\":true,\"_StartTime\":1593732273,\"_EndTime\":0,\"_Id\":1593732273}}, \"11\":{\"HOLDING_REG\":{\"Units\":\"b\", \"Writeable\":false, \"Description\":\"Status\", \"Name\":\"Status\", \"Size\":16, \"Readable\":true, \"Encoding\":\"UINT16\",\"_Current\":true,\"_StartTime\":1593732274,\"_EndTime\":0,\"_Id\":1593732274}}, \"16\":{\"HOLDING_REG\":{\"Units\":\"a\", \"Writeable\":true, \"Description\":\"Slave Address\", \"Name\":\"Slave Address\", \"Size\":16, \"Readable\":true, \"Encoding\":\"UINT16\",\"_Current\":true,\"_StartTime\":1593732275,\"_EndTime\":0,\"_Id\":1593732275}}, \"0\":{\"HOLDING_REG\":{\"Units\":\"M3\", \"Writeable\":false, \"Description\":\"Meter Reading\", \"Name\":\"Total Consumption\", \"Size\":32, \"Readable\":true, \"Encoding\":\"UINT32\",\"_Current\":true,\"_StartTime\":1593732276,\"_EndTime\":0,\"_Id\":1593732276}}}}"}
-    { "MOD_MAP_CONXIONS_WATER_METER_V1", """{"MODBUS_MAP":{"2":{"HOLDING_REG":{"Units":"M3/H", "Writeable":false, "Description":"Instantaneous Flow rate", "Name":"Flow Rate", "Size":32, "Readable":true, "Encoding":"UINT32","_Current":true,"_StartTime":1593732266,"_EndTime":0,"_Id":1593732266}}, "4":{"HOLDING_REG":{"Units":"C", "Writeable":false, "Description":"Instantaneous Water Temperature", "Name":"Water Temperature", "Size":16, "Readable":true, "Encoding":"UINT16","_Current":true,"_StartTime":1593732267,"_EndTime":0,"_Id":1593732267}}, "5":{"HOLDING_REG":{"Units":"ss", "Writeable":false, "Description":"Time Second", "Name":"Second", "Size":16, "Readable":true, "Encoding":"UINT16","_Current":true,"_StartTime":1593732268,"_EndTime":0,"_Id":1593732268}}, "6":{"HOLDING_REG":{"Units":"mm", "Writeable":false, "Description":"Time Minute", "Name":"Minute", "Size":16, "Readable":true, "Encoding":"UINT16","_Current":true,"_StartTime":1593732269,"_EndTime":0,"_Id":1593732269}}, "7":{"HOLDING_REG":{"Units":"hh", "Writeable":false, "Description":"Time Hour", "Name":"Hour", "Size":16, "Readable":true, "Encoding":"UINT16","_Current":true,"_StartTime":1593732270,"_EndTime":0,"_Id":1593732270}}, "8":{"HOLDING_REG":{"Units":"DD", "Writeable":false, "Description":"Time Day", "Name":"Day", "Size":16, "Readable":true, "Encoding":"UINT16","_Current":true,"_StartTime":1593732271,"_EndTime":0,"_Id":1593732271}}, "9":{"HOLDING_REG":{"Units":"MM", "Writeable":false, "Description":"Time Month", "Name":"Month", "Size":16, "Readable":true, "Encoding":"UINT16","_Current":true,"_StartTime":1593732272,"_EndTime":0,"_Id":1593732272}}, "10":{"HOLDING_REG":{"Units":"YYYY", "Writeable":false, "Description":"Time Year", "Name":"Year", "Size":16, "Readable":true, "Encoding":"UINT16","_Current":true,"_StartTime":1593732273,"_EndTime":0,"_Id":1593732273}}, "11":{"HOLDING_REG":{"Units":"b", "Writeable":false, "Description":"Status", "Name":"Status", "Size":16, "Readable":true, "Encoding":"UINT16","_Current":true,"_StartTime":1593732274,"_EndTime":0,"_Id":1593732274}}, "16":{"HOLDING_REG":{"Units":"a", "Writeable":true, "Description":"Slave Address", "Name":"Slave Address", "Size":16, "Readable":true, "Encoding":"UINT16","_Current":true,"_StartTime":1593732275,"_EndTime":0,"_Id":1593732275}}, "0":{"HOLDING_REG":{"Units":"M3", "Writeable":false, "Description":"Meter Reading", "Name":"Total Consumption", "Size":32, "Readable":true, "Encoding":"UINT32","_Current":true,"_StartTime":1593732276,"_EndTime":0,"_Id":1593732276}}}}"""}
-};
+foreach (byte[] avlByteData in frame.avlDataBytesList)
+{
+    //Console.WriteLine(string.Join(", ", avlData));
+    //byte[] timestamp = avlData[..8];  // UNIX
+    //int priority = avlData[8];
+    //byte[] gpsElementData = avlData[9..24];  // 15 bytes
+    //byte[] ioElement = avlData[24..];
 
-var networkConfig = new Dictionary<dynamic, dynamic>();
-//var waterMeterMap = ModbusMap["MOD_MAP_CONXIONS_WATER_METER_V1"];
-Dictionary<string, dynamic> waterMeterMap = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(ModbusMap["MOD_MAP_CONXIONS_WATER_METER_V1"]);
-//networkConfig = AddSlaveToNetwork(networkConfig, "BUS_A", "2", "Conxions", "Test Modbus Map", waterMeterMap["MODBUS_MAP"], null);
-networkConfig = AddSlaveToNetwork(networkConfig, "BUS_A", "2", "Conxions", "Test Modbus Map", waterMeterMap["MODBUS_MAP"]);
-Console.WriteLine(JsonConvert.SerializeObject(networkConfig, Formatting.Indented));
+    AvlDataCodec8Extended avlData = new AvlDataCodec8Extended(avlByteData);
+    DateTimeOffset avlRecordTimestamp = avlData.GetTimestamp();
+    Console.WriteLine(avlRecordTimestamp);
+    int priority = avlData.priority;
+
+    GPSElement gpsElement = avlData.GetGPSElement();
+    int longitude = gpsElement.GetLongitude();
+    int latitude = gpsElement.GetLatitude();
+    int altitude = gpsElement.GetAltitude();
+    int angle = gpsElement.GetAngle();
+    int satellites = gpsElement.visibleSatellites;
+    int speed = gpsElement.GetSpeed();
+    Console.WriteLine($"Coordinates: {longitude}, {latitude}");
+
+    IOElementCodec8Extended ioElement = avlData.GetIOElement();
+    int eventIoId = BytesToNumbers.GetInt16(ioElement.eventIoId);
+    int totalCount = BytesToNumbers.GetInt16(ioElement.totalCount);
+
+    foreach ((byte[] id, byte value) in ioElement.oneByteIdValuePairs)
+    {
+        int parameterId = BytesToNumbers.GetInt16(id);
+        bool idExists = Enum.IsDefined(typeof(Fmc650InputOutputElement), parameterId);
+        string parameterName = "(Unknown Parameter)";
+        int parameterValue = (int)value;
+        if (idExists)
+        {
+            parameterName = ((Fmc650InputOutputElement)parameterId).ToString();
+        }
+
+        Console.WriteLine($"IO Parameter: {parameterName} ({parameterId}) | Value: {parameterValue}");
+    }
+
+    foreach ((byte[] id, byte[] value) in ioElement.twoByteIdValuePairs)
+    {
+        int parameterId = BytesToNumbers.GetInt16(id);
+        bool idExists = Enum.IsDefined(typeof(Fmc650InputOutputElement), parameterId);
+        string ioParameterName = "(Unknown Parameter)";
+        int parameterValue = BytesToNumbers.GetInt16(value);
+        if (idExists)
+        {
+            ioParameterName = ((Fmc650InputOutputElement)parameterId).ToString();
+        }
+
+        Console.WriteLine($"IO Parameter: {ioParameterName} ({parameterId}) | Value: {parameterValue}");
+    }
+
+    foreach ((byte[] id, byte[] value) in ioElement.fourByteIdValuePairs)
+    {
+        int parameterId = BytesToNumbers.GetInt16(id);
+        bool idExists = Enum.IsDefined(typeof(Fmc650InputOutputElement), parameterId);
+        string ioParameterName = "(Unknown Parameter)";
+        int parameterValue = BytesToNumbers.GetInt32(value);
+        if (idExists)
+        {
+            ioParameterName = ((Fmc650InputOutputElement)parameterId).ToString();
+        }
+
+        Console.WriteLine($"IO Parameter: {ioParameterName} ({parameterId}) | Value: {parameterValue}");
+    }
+
+    foreach ((byte[] id, byte[] value) in ioElement.eightByteIdValuePairs)
+    {
+        int parameterId = BytesToNumbers.GetInt16(id);
+        bool idExists = Enum.IsDefined(typeof(Fmc650InputOutputElement), parameterId);
+        string ioParameterName = "(Unknown Parameter)";
+        long parameterValue = BytesToNumbers.GetInt64(value);
+        if (idExists)
+        {
+            ioParameterName = ((Fmc650InputOutputElement)parameterId).ToString();
+        }
+
+        Console.WriteLine($"IO Parameter: {ioParameterName} ({parameterId}) | Value: {parameterValue}");
+    }
+
+    foreach ((byte[] id, byte[] value) in ioElement.xByteIdValuePairs)
+    {
+        int parameterId = BytesToNumbers.GetInt16(id);
+        bool idExists = Enum.IsDefined(typeof(Fmc650InputOutputElement), parameterId);
+        string ioParameterName = "(Unknown Parameter)";
+        long parameterValue = BytesToNumbers.GetInt64(value);
+        if (idExists)
+        {
+            ioParameterName = ((Fmc650InputOutputElement)parameterId).ToString();
+        }
+
+        Console.WriteLine($"IO Parameter: {ioParameterName} ({parameterId}) | Value: {parameterValue}");
+    }
+
+    Console.WriteLine();
+}
+
+Console.ReadLine();
+
+
