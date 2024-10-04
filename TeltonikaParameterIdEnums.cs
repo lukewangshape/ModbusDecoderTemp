@@ -8,6 +8,8 @@ namespace ModbusDecoderTemp
 {
     public enum Fmc650InputOutputElement
     {
+        None = 0,  // Default / no event
+
         // One byte count elements
         DigitalInput1 = 1,
         DigitalInput2 = 2,
