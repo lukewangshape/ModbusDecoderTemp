@@ -47,5 +47,17 @@ namespace ModbusDecoderTemp
         IMSI = 218
     }
 
-
+    public enum SbdAvlIds
+    {
+        PeriodicRecording = 0,
+        DigitalInput1 = 1,
+        DigitalInput2 = 2,
+        DigitalInput3 = 3,
+        DigitalInput4 = 4,
+        DigitalOutput1 = 5,
+        DigitalOutput2 = 6,
+        DigitalOutput3 = 7,
+        DigitalOutput4 = 8,
+        Speed = 9
+    }
 }
